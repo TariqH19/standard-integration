@@ -12,11 +12,11 @@ const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PORT = 8888 } = process.env;
 const base = "https://api-m.sandbox.paypal.com";
 const app = express();
 
-// host static files
+// Host static files
 const clientPath = path.join(__dirname, "../client");
 app.use(express.static(clientPath));
 
-// parse post params sent in body in json format
+// Parse post params sent in body in JSON format
 app.use(express.json());
 
 /**
@@ -29,13 +29,14 @@ const generateAccessToken = async () => {
       throw new Error("MISSING_API_CREDENTIALS");
     }
     const auth = Buffer.from(
-      PAYPAL_CLIENT_ID + ":" + PAYPAL_CLIENT_SECRET
+      `${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`
     ).toString("base64");
     const response = await fetch(`${base}/v1/oauth2/token`, {
       method: "POST",
       body: "grant_type=client_credentials",
       headers: {
         Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
@@ -43,6 +44,7 @@ const generateAccessToken = async () => {
     return data.access_token;
   } catch (error) {
     console.error("Failed to generate Access Token:", error);
+    throw error;
   }
 };
 
@@ -51,16 +53,10 @@ const generateAccessToken = async () => {
  * @see https://developer.paypal.com/docs/api/orders/v2/#orders_create
  */
 const createOrder = async (cart) => {
-  // use the cart information passed from the front-end to calculate the purchase unit details
-  console.log(
-    "shopping cart information passed from the frontend createOrder() callback:",
-    cart
-  );
-
   const accessToken = await generateAccessToken();
   const url = `${base}/v2/checkout/orders`;
   const payload = {
-    intent: "CAPTURE",
+    intent: "AUTHORIZE",
     purchase_units: [
       {
         amount: {
@@ -75,11 +71,6 @@ const createOrder = async (cart) => {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
-      // Uncomment one of these to force an error for negative testing (in sandbox mode only). Documentation:
-      // https://developer.paypal.com/tools/sandbox/negative-testing/request-headers/
-      // "PayPal-Mock-Response": '{"mock_application_codes": "MISSING_REQUIRED_PARAMETER"}'
-      // "PayPal-Mock-Response": '{"mock_application_codes": "PERMISSION_DENIED"}'
-      // "PayPal-Mock-Response": '{"mock_application_codes": "INTERNAL_SERVER_ERROR"}'
     },
     method: "POST",
     body: JSON.stringify(payload),
@@ -89,23 +80,41 @@ const createOrder = async (cart) => {
 };
 
 /**
- * Capture payment for the created order to complete the transaction.
- * @see https://developer.paypal.com/docs/api/orders/v2/#orders_capture
+ * Authorize an order.
+ * @see https://developer.paypal.com/docs/api/orders/v2/#orders_authorize
  */
-const captureOrder = async (orderID) => {
+const authorizeOrder = async (orderID) => {
   const accessToken = await generateAccessToken();
-  const url = `${base}/v2/checkout/orders/${orderID}/capture`;
+  const url = `${base}/v2/checkout/orders/${orderID}/authorize`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
-      // Uncomment one of these to force an error for negative testing (in sandbox mode only). Documentation:
-      // https://developer.paypal.com/tools/sandbox/negative-testing/request-headers/
-      // "PayPal-Mock-Response": '{"mock_application_codes": "INSTRUMENT_DECLINED"}'
-      // "PayPal-Mock-Response": '{"mock_application_codes": "TRANSACTION_REFUSED"}'
-      // "PayPal-Mock-Response": '{"mock_application_codes": "INTERNAL_SERVER_ERROR"}'
+    },
+  });
+
+  return handleResponse(response);
+};
+
+/**
+ * Capture payment for an authorization.
+ * @see https://developer.paypal.com/docs/api/payments/v2/#authorizations_capture
+ */
+const captureOrder = async (authorizationID) => {
+  const accessToken = await generateAccessToken();
+  const url = `${base}/v2/payments/authorizations/${authorizationID}/capture`;
+
+  // Generate a unique PayPal-Request-ID to ensure idempotency
+  // const requestId = `capture-${Date.now()}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      // "PayPal-Request-Id": requestId, // Unique ID for the request
     },
   });
 
@@ -127,30 +136,54 @@ async function handleResponse(response) {
 
 app.post("/api/orders", async (req, res) => {
   try {
-    // use the cart information passed from the front-end to calculate the order amount detals
     const { cart } = req.body;
     const { jsonResponse, httpStatusCode } = await createOrder(cart);
-    res.status(httpStatusCode).json(jsonResponse);
+
+    if (httpStatusCode === 201) {
+      // HTTP 201 Created
+      // Send the order ID back to the client
+      const orderID = jsonResponse.id;
+      res.status(httpStatusCode).json({ orderID });
+    } else {
+      res.status(httpStatusCode).json(jsonResponse);
+    }
   } catch (error) {
     console.error("Failed to create order:", error);
     res.status(500).json({ error: "Failed to create order." });
   }
 });
 
-app.post("/api/orders/:orderID/capture", async (req, res) => {
+app.post("/api/orders/:orderID/authorize", async (req, res) => {
   try {
     const { orderID } = req.params;
-    const { jsonResponse, httpStatusCode } = await captureOrder(orderID);
+    const { jsonResponse, httpStatusCode } = await authorizeOrder(orderID);
     res.status(httpStatusCode).json(jsonResponse);
   } catch (error) {
-    console.error("Failed to create order:", error);
+    console.error("Failed to authorize order:", error);
+    res.status(500).json({ error: "Failed to authorize order." });
+  }
+});
+
+app.post("/api/orders/:authorizationID/capture", async (req, res) => {
+  try {
+    const { authorizationID } = req.params;
+    console.log(
+      `Attempting to capture with authorizationID: ${authorizationID}`
+    );
+    const { jsonResponse, httpStatusCode } = await captureOrder(
+      authorizationID
+    );
+    res.status(httpStatusCode).json(jsonResponse);
+  } catch (error) {
+    console.error("Failed to capture order:", error);
     res.status(500).json({ error: "Failed to capture order." });
   }
 });
 
-// serve index.html
+
+// Serve the checkout page
 app.get("/", (req, res) => {
-  res.sendFile(path.resolve("../client/checkout.html"));
+  res.sendFile(path.resolve(__dirname, "../client/checkout.html"));
 });
 
 app.listen(PORT, () => {
