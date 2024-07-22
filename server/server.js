@@ -51,7 +51,7 @@ app.post("/api/create-product-plan", async (req, res) => {
         name: "Gym Membership",
         description: "A monthly membership for the gym",
         type: "SERVICE",
-        category: "SOFTWARE",
+        category: "EXERCISE_AND_FITNESS",
         image_url: "https://example.com/image.jpg",
         home_url: "https://example.com",
       }),
