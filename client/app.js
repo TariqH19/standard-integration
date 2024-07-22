@@ -1,5 +1,14 @@
 window.paypal
   .Buttons({
+    style: {
+      shape: "pill",
+      layout: "vertical",
+      color: "black",
+      label: "pay",
+    },
+    message: {
+      amount: 100,
+    },
     async createOrder() {
       try {
         const response = await fetch("/api/orders", {
@@ -23,17 +32,16 @@ window.paypal
 
         if (orderData.id) {
           return orderData.id;
-        } else {
-          const errorDetail = orderData?.details?.[0];
-          const errorMessage = errorDetail
-            ? `${errorDetail.issue} ${errorDetail.description} (${orderData.debug_id})`
-            : JSON.stringify(orderData);
-
-          throw new Error(errorMessage);
         }
+        const errorDetail = orderData?.details?.[0];
+        const errorMessage = errorDetail
+          ? `${errorDetail.issue} ${errorDetail.description} (${orderData.debug_id})`
+          : JSON.stringify(orderData);
+
+        throw new Error(errorMessage);
       } catch (error) {
         console.error(error);
-        resultMessage(`Could not initiate PayPal Checkout...<br><br>${error}`);
+        // resultMessage(`Could not initiate PayPal Checkout...<br><br>${error}`);
       }
     },
     async onApprove(data, actions) {
@@ -55,7 +63,8 @@ window.paypal
 
         if (errorDetail?.issue === "INSTRUMENT_DECLINED") {
           // (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
-          // recoverable state, per https://developer.paypal.com/docs/checkout/standard/customize/handle-funding-failures/
+          // recoverable state, per
+          // https://developer.paypal.com/docs/checkout/standard/customize/handle-funding-failures/
           return actions.restart();
         } else if (errorDetail) {
           // (2) Other non-recoverable errors -> Show a failure message
@@ -69,7 +78,8 @@ window.paypal
             orderData?.purchase_units?.[0]?.payments?.captures?.[0] ||
             orderData?.purchase_units?.[0]?.payments?.authorizations?.[0];
           resultMessage(
-            `Transaction ${transaction.status}: ${transaction.id}<br><br>See console for all available details`
+            `Transaction ${transaction.status}: ${transaction.id}<br>
+          <br>See console for all available details`
           );
           console.log(
             "Capture result",
@@ -84,11 +94,35 @@ window.paypal
         );
       }
     },
+    onShippingOptionsChange: (data, actions) => {
+      // data will return:
+      // OrderID, selectedShippingOption, and errors
+      // actions will return:
+      // `reject` function for you to display an error in the popup
+      // Use case:
+      // If you want to offer different sipping options
+      // like express shipping or pick up in store,
+      // this is where we return data to you for you
+      // to be able to update an order
+    },
+    onShippingAddressChange: (data, actions) => {
+      // data will return:
+      // OrderID, shippingAddress, and errors
+      // actions will return:
+      // `reject` function for you to display an error in the popup
+      // Use case:
+      // As the customer changes their address in the popup,
+      // the information will be sent back here so you can
+      // update any order pricing or send an error that you
+      // dont ship to a specific location
+    },
+    onError: (err) => {
+      // redirect to your specific error page
+      window.location.assign("/");
+    },
+    onCancel: (data) => {
+      // Show a cancel page or return to cart
+      window.location.assign("/");
+    },
   })
   .render("#paypal-button-container");
-
-// Example function to show a result to the user. Your site's UI library can be used instead.
-function resultMessage(message) {
-  const container = document.querySelector("#result-message");
-  container.innerHTML = message;
-}
