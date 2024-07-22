@@ -63,6 +63,36 @@
         font-size: 16px;
         color: #333;
       }
+
+      #capture-button {
+        display: none; /* Hidden by default */
+        background-color: #0070ba; /* PayPal Blue */
+        color: white; /* Text color */
+        border: none; /* Remove border */
+        border-radius: 4px; /* Rounded corners */
+        padding: 12px 24px; /* Padding inside the button */
+        font-size: 16px; /* Font size */
+        cursor: pointer; /* Pointer cursor on hover */
+        transition: background-color 0.3s, transform 0.2s; /* Smooth transitions */
+      }
+
+      /* Hover Effect */
+      #capture-button:hover {
+        background-color: #005ea6; /* Darker blue */
+        transform: scale(1.05); /* Slightly enlarge the button */
+      }
+
+      /* Focus Effect */
+      #capture-button:focus {
+        outline: none; /* Remove default focus outline */
+        box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2); /* Add custom focus outline */
+      }
+
+      /* Disabled State */
+      #capture-button:disabled {
+        background-color: #d6d6d6; /* Grey */
+        cursor: not-allowed; /* Not allowed cursor */
+      }
     </style>
   </head>
   <body>
@@ -80,9 +110,12 @@
 
       <div id="paypal-button-container"></div>
       <p id="result-message"></p>
+
+      <!-- Capture Button -->
+      <button id="capture-button">Capture Payment</button>
     </div>
 
-    <script src="https://www.paypal.com/sdk/js?client-id=Abbz7vGw_5c8_cdyGzrRM_ZmP8YISHGRbN0SeR1aWPF4XesBlhwds2M9bsMwHpeEaSyfqOrJKTvRuPkD&currency=GBP"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=Abbz7vGw_5c8_cdyGzrRM_ZmP8YISHGRbN0SeR1aWPF4XesBlhwds2M9bsMwHpeEaSyfqOrJKTvRuPkD&intent=authorize&currency=GBP"></script>
     <script src="app.js"></script>
   </body>
 </html>

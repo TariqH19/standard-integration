@@ -1,3 +1,5 @@
+let authorizationId; // Store the authorization ID globally
+
 window.paypal
   .Buttons({
     style: {
@@ -6,9 +8,6 @@ window.paypal
       color: "black",
       label: "pay",
     },
-    message: {
-      amount: 100,
-    },
     async createOrder() {
       try {
         const response = await fetch("/api/orders", {
@@ -16,8 +15,6 @@ window.paypal
           headers: {
             "Content-Type": "application/json",
           },
-          // use the "body" param to optionally pass additional order information
-          // like product ids and quantities
           body: JSON.stringify({
             cart: [
               {
@@ -30,23 +27,20 @@ window.paypal
 
         const orderData = await response.json();
 
-        if (orderData.id) {
-          return orderData.id;
+        if (orderData.orderID) {
+          orderId = orderData.orderID; // Store the order ID
+          return orderData.orderID;
         }
-        const errorDetail = orderData?.details?.[0];
-        const errorMessage = errorDetail
-          ? `${errorDetail.issue} ${errorDetail.description} (${orderData.debug_id})`
-          : JSON.stringify(orderData);
 
-        throw new Error(errorMessage);
+        throw new Error("Order creation failed.");
       } catch (error) {
-        console.error(error);
-        // resultMessage(`Could not initiate PayPal Checkout...<br><br>${error}`);
+        console.error("Failed to create order:", error);
+        resultMessage(`Failed to create order. ${error.message}`);
       }
     },
     async onApprove(data, actions) {
       try {
-        const response = await fetch(`/api/orders/${data.orderID}/capture`, {
+        const response = await fetch(`/api/orders/${data.orderID}/authorize`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -54,75 +48,101 @@ window.paypal
         });
 
         const orderData = await response.json();
-        // Three cases to handle:
-        //   (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
-        //   (2) Other non-recoverable errors -> Show a failure message
-        //   (3) Successful transaction -> Show confirmation or thank you message
 
-        const errorDetail = orderData?.details?.[0];
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
 
-        if (errorDetail?.issue === "INSTRUMENT_DECLINED") {
-          // (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
-          // recoverable state, per
-          // https://developer.paypal.com/docs/checkout/standard/customize/handle-funding-failures/
+        if (orderData.details?.[0]?.issue === "INSTRUMENT_DECLINED") {
           return actions.restart();
-        } else if (errorDetail) {
-          // (2) Other non-recoverable errors -> Show a failure message
-          throw new Error(`${errorDetail.description} (${orderData.debug_id})`);
-        } else if (!orderData.purchase_units) {
-          throw new Error(JSON.stringify(orderData));
-        } else {
-          // (3) Successful transaction -> Show confirmation or thank you message
-          // Or go to another URL:  actions.redirect('thank_you.html');
-          const transaction =
-            orderData?.purchase_units?.[0]?.payments?.captures?.[0] ||
-            orderData?.purchase_units?.[0]?.payments?.authorizations?.[0];
-          resultMessage(
-            `Transaction ${transaction.status}: ${transaction.id}<br>
-          <br>See console for all available details`
-          );
-          console.log(
-            "Capture result",
-            orderData,
-            JSON.stringify(orderData, null, 2)
+        }
+
+        if (orderData.details?.[0]) {
+          throw new Error(
+            `${orderData.details[0].description} (${orderData.debug_id})`
           );
         }
+
+        // Store the authorization ID
+        const authorization =
+          orderData.purchase_units[0]?.payments?.authorizations?.[0];
+        if (authorization) {
+          authorizationId = authorization.id;
+        }
+
+        // Show the capture button after successful authorization
+        document.getElementById("capture-button").style.display = "block";
+        resultMessage(`Order authorized. Authorization ID: ${authorizationId}`);
       } catch (error) {
-        console.error(error);
+        console.error("Failed to authorize order:", error);
         resultMessage(
-          `Sorry, your transaction could not be processed...<br><br>${error}`
+          `Sorry, your transaction could not be processed...<br><br>${error.message}`
         );
       }
     },
-    onShippingOptionsChange: (data, actions) => {
-      // data will return:
-      // OrderID, selectedShippingOption, and errors
-      // actions will return:
-      // `reject` function for you to display an error in the popup
-      // Use case:
-      // If you want to offer different sipping options
-      // like express shipping or pick up in store,
-      // this is where we return data to you for you
-      // to be able to update an order
-    },
-    onShippingAddressChange: (data, actions) => {
-      // data will return:
-      // OrderID, shippingAddress, and errors
-      // actions will return:
-      // `reject` function for you to display an error in the popup
-      // Use case:
-      // As the customer changes their address in the popup,
-      // the information will be sent back here so you can
-      // update any order pricing or send an error that you
-      // dont ship to a specific location
-    },
     onError: (err) => {
-      // redirect to your specific error page
-      window.location.assign("/");
+      console.error("PayPal error:", err);
+      resultMessage("An error occurred with PayPal.");
     },
     onCancel: (data) => {
-      // Show a cancel page or return to cart
-      window.location.assign("/");
+      console.log("PayPal payment canceled:", data);
+      resultMessage("Payment was canceled.");
     },
   })
   .render("#paypal-button-container");
+
+document
+  .getElementById("capture-button")
+  .addEventListener("click", async () => {
+    try {
+      if (!authorizationId) {
+        throw new Error("Authorization ID is not available.");
+      }
+
+      const response = await fetch(`/api/orders/${authorizationId}/capture`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          `HTTP error! Status: ${response.status}, Details: ${
+            errorData.details?.[0]?.description || "Unknown error"
+          }`
+        );
+      }
+
+      const orderData = await response.json();
+
+      if (orderData.details?.[0]) {
+        throw new Error(
+          `${orderData.details[0].description} (${orderData.debug_id})`
+        );
+      }
+
+      const transaction =
+        orderData?.purchase_units?.[0]?.payments?.captures?.[0] ||
+        orderData?.purchase_units?.[0]?.payments?.authorizations?.[0];
+
+      resultMessage(
+        `Transaction COMPLETED <br><br>See console for all available details`
+      );
+      console.log(
+        "Capture result",
+        orderData,
+        JSON.stringify(orderData, null, 2)
+      );
+    } catch (error) {
+      console.error("Failed to capture payment:", error);
+      resultMessage(
+        `Sorry, your transaction could not be processed...<br><br>${error.message}`
+      );
+    }
+  });
+
+function resultMessage(message) {
+  document.getElementById("result-message").innerHTML = message;
+}
