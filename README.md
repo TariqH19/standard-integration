@@ -1,6 +1,6 @@
 # Standard integration
 
-Sample Node.js web app to integrate PayPal Standard Checkout for online payments
+APP
 
 ## Installation
 
@@ -16,6 +16,7 @@ Install my-project with npm
 ![App Screenshot](https://image-upload-example2.s3.eu-west-1.amazonaws.com/Screenshot+2024-05-03+181442.png)
 
 ## 🔗 Links
+
 [![portfolio](https://img.shields.io/badge/my_portfolio-000?style=for-the-badge&logo=ko-fi&logoColor=white)](https://tariq-horan.vercel.app/)
 
 [![linkedin](https://img.shields.io/badge/linkedin-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/tariq-horan/)
@@ -30,7 +31,3 @@ In the project directory, you can run:
 
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-
-
-
