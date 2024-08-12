@@ -94,35 +94,29 @@ window.paypal
         );
       }
     },
-    onShippingOptionsChange: (data, actions) => {
-      // data will return:
-      // OrderID, selectedShippingOption, and errors
-      // actions will return:
-      // `reject` function for you to display an error in the popup
-      // Use case:
-      // If you want to offer different sipping options
-      // like express shipping or pick up in store,
-      // this is where we return data to you for you
-      // to be able to update an order
+    onShippingOptionsChange(data, actions) {
+      return fetch("/api/orders/update-shipping", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderID: data.orderID,
+          selectedShippingOption: data.selectedShippingOption,
+        }),
+      }).then((response) => response.json());
     },
-    onShippingAddressChange: (data, actions) => {
-      // data will return:
-      // OrderID, shippingAddress, and errors
-      // actions will return:
-      // `reject` function for you to display an error in the popup
-      // Use case:
-      // As the customer changes their address in the popup,
-      // the information will be sent back here so you can
-      // update any order pricing or send an error that you
-      // dont ship to a specific location
-    },
-    onError: (err) => {
-      // redirect to your specific error page
-      window.location.assign("/");
-    },
-    onCancel: (data) => {
-      // Show a cancel page or return to cart
-      window.location.assign("/");
+    onShippingAddressChange(data, actions) {
+      return fetch("/api/orders/update-address", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderID: data.orderID,
+          shippingAddress: data.shippingAddress,
+        }),
+      });
     },
   })
   .render("#paypal-button-container");
