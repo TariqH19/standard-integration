@@ -212,6 +212,10 @@ app.get("/", (req, res) => {
   res.sendFile(path.resolve("../client/checkout.html"));
 });
 
+app.get("/donate", (req, res) => {
+  res.sendFile(path.resolve("../client/donate.html"));
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
